@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>機車預約服務網站</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 550px;
+            margin: 0 auto;
+            padding: 8px;
+            position: relative;
+        }
+        
+        canvas {
+            width: 100% !important;
+            height: auto !important;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            background-color: #ffffff;
+            touch-action: manipulation;
+            cursor: pointer;
+        }
+
+        .form-control {
+            margin-bottom: 0.75rem;
+        }
+        .form-control label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            color: #1f2937;
+            font-size: 14px;
+        }
+        .form-control input, .form-control textarea {
+            width: 100%;
+            padding: 0.65rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        #loadingOverlay, #customModal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
+        /* 仿圖片樣式的彈窗內容 */
+        .modal-content {
+            background: white;
+            padding: 32px 24px;
+            border-radius: 16px;
+            max-width: 420px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #lineLinkOverlay {
+            position: absolute;
+            display: none;
+            background-color: rgba(0,0,0,0);
+            z-index: 100;
+            cursor: pointer;
+        }
+        
+        #datePicker {
+            -webkit-appearance: none;
+            width: 100%;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans pb-6">
+
+    <!-- 載入中遮罩 -->
+    <div id="loadingOverlay">
+        <div class="flex flex-col items-center bg-white p-6 rounded-lg">
+            <div class="spinner"></div>
+            <p id="loadingText" class="mt-4 text-blue-600 font-bold text-sm">預約處理中，請稍候...</p>
+        </div>
+    </div>
+
+    <!-- 自定義提示彈窗 -->
+    <div id="customModal">
+        <div class="modal-content">
+            <div class="text-amber-500 mb-4">
+                <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mb-4">預約提醒</h3>
+            <p class="text-base text-gray-700 leading-relaxed mb-8 px-2">
+                若您選擇 <span class="text-blue-600 font-semibold">【清洗節流閥】</span>、<span class="text-blue-600 font-semibold">【清洗噴油嘴】</span> 或 <span class="text-blue-600 font-semibold">【前叉保養】</span>，因作業時間較長，將以 <span class="text-red-600 font-bold">留車方式</span>，以利我們安排施工，謝謝您的配合與體諒。
+            </p>
+            <button id="modalConfirmBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-95">
+                我知道了，繼續預約
+            </button>
+        </div>
+    </div>
+
+    <div id="container">
+        <h1 class="text-xl font-bold text-center text-blue-700 py-3 w-full">機車服務預約系統</h1>
+
+        <!-- 步驟 1 日期選擇區 -->
+        <div id="step1Control" class="w-full bg-blue-50 p-3 rounded-t-lg border-t border-x border-blue-200 box-border">
+            <h3 class="text-base font-semibold mb-2 text-blue-600">步驟 1: 選擇日期</h3>
+            <div class="w-full overflow-hidden">
+                <input type="date" id="datePicker" class="p-2 border border-blue-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+            </div>
+            <div class="text-[10px] text-gray-500 mt-2 grid grid-cols-2 gap-1">
+                <p class="text-red-500">※ 限預約明天開始30天內</p>
+                <p class="text-red-500 font-semibold">※ 週日全店公休</p>
+                <p>※ 金力盛週六休息</p>
+                <p class="text-red-600">※ 元旦/清明/端午/中秋公休</p>
+            </div>
+        </div>
+
+        <!-- 畫布互動區 -->
+        <div class="relative w-full">
+            <canvas id="reservationCanvas" width="550" height="730"></canvas>
+            <a id="lineLinkOverlay" href="https://lin.ee/E0OUGxq" target="_blank"></a>
+        </div>
+
+        <!-- 步驟 4 填寫資料區 -->
+        <div id="htmlInputs" class="w-full">
+            <div id="step4Control" style="display:none;" class="bg-white p-5 rounded-b-lg shadow-md border-x border-b border-gray-200">
+                <h3 class="text-lg font-bold mb-4 text-blue-700 border-b pb-2 text-center">步驟 4: 填寫聯繫資料</h3>
+                
+                <div class="form-control">
+                    <label>稱謂:</label>
+                    <div class="flex space-x-6 p-2 bg-gray-50 rounded">
+                        <label class="flex items-center"><input type="radio" name="userTitle" value="先生" checked class="w-5 h-5 mr-2"> 先生</label>
+                        <label class="flex items-center"><input type="radio" name="userTitle" value="小姐" class="w-5 h-5 mr-2"> 小姐</label>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="form-control">
+                        <label>姓氏<span class="text-red-500">*</span></label>
+                        <input type="text" id="userName" placeholder="王">
+                    </div>
+                    <div class="form-control">
+                        <label>電話<span class="text-red-500">*</span></label>
+                        <input type="tel" id="userPhone" placeholder="0912...">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="form-control">
+                        <label>車牌號碼<span class="text-red-500">*</span></label>
+                        <input type="text" id="licensePlate" placeholder="ABC-1234">
+                    </div>
+                    <div class="form-control">
+                        <label>目前公里數 <span class="text-gray-400 font-normal">(選填)</span></label>
+                        <input type="number" id="mileage" placeholder="例如: 5000">
+                    </div>
+                </div>
+
+                <!-- 新增 Email 欄位 (必填) -->
+                <div class="form-control">
+                    <label>電子郵件 (Email)<span class="text-red-500">*</span></label>
+                    <input type="email" id="userEmail" placeholder="example@mail.com">
+                </div>
+
+                <div class="form-control">
+                    <label>車款/車型<span class="text-red-500">*</span></label>
+                    <input type="text" id="carModel" placeholder="例如: 勁戰六代">
+                </div>
+
+                <div class="form-control">
+                    <label>其他備註</label>
+                    <textarea id="otherText" rows="2" placeholder="賞車或其他需求、指定輪胎等說明..."></textarea>
+                </div>
+                
+                <p id="errorMsg" class="text-xs text-red-600 font-bold mb-4 hidden text-center">⚠️ 請務必填寫所有帶星號 (*) 的欄位</p>
+                
+                <button id="finalSubmitBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg text-lg shadow-lg transition-all active:scale-95">
+                    確認資料無誤，立即預約送出
+                </button>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        const makeWebhookUrl = "https://hook.us2.make.com/zckx5waq6hex9uk74n4wg15fvdy02u2r";
+
+        const canvas = document.getElementById('reservationCanvas');
+        const ctx = canvas.getContext('2d');
+        const datePicker = document.getElementById('datePicker');
+        const step1Control = document.getElementById('step1Control');
+        const step4Control = document.getElementById('step4Control');
+        const errorMsg = document.getElementById('errorMsg');
+        const lineLinkOverlay = document.getElementById('lineLinkOverlay');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const finalSubmitBtn = document.getElementById('finalSubmitBtn');
+        const customModal = document.getElementById('customModal');
+        const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+
+        let currentStep = 1;
+        const serviceItems = ['輪胎', '煞車皮', '電池', '機油', '火星塞', '皮帶', '空濾', '碟盤', '傳動', '清洗節流閥', '清洗噴油嘴', '煞車油', '驗排氣', '前叉保養', '賞車', '其它'];
+        
+        let selectedStore = null;
+        let selectedTime = null;
+        let selectedItems = {};
+        let uiWarning = "";
+
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        const thirtyDaysLater = new Date(tomorrow);
+        thirtyDaysLater.setDate(tomorrow.getDate() + 30);
+
+        datePicker.min = tomorrow.toISOString().split('T')[0];
+        datePicker.max = thirtyDaysLater.toISOString().split('T')[0];
+        datePicker.value = tomorrow.toISOString().split('T')[0];
+
+        function isSunday() { return new Date(datePicker.value).getDay() === 0; }
+        function isSaturday() { return new Date(datePicker.value).getDay() === 6; }
+
+        function checkHoliday() {
+            const d = new Date(datePicker.value);
+            const md = `${d.getMonth()+1}/${d.getDate()}`;
+            const y = d.getFullYear();
+            if (md === "1/1") return "元旦公休";
+            if (md === "4/4" || md === "4/5") return "清明假期公休";
+            if (y === 2025) {
+                if (md === "5/31") return "端午節公休";
+                if (md === "10/6") return "中秋節公休";
+            }
+            return null;
+        }
+        
+        function drawStep1() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            step1Control.style.display = 'block';
+            step4Control.style.display = 'none';
+            lineLinkOverlay.style.display = 'none';
+            
+            ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('請確認預約日期', 40, 60);
+            
+            const holiday = checkHoliday();
+            if (isSunday()) {
+                ctx.fillStyle = '#ef4444'; ctx.font = 'bold 22px sans-serif';
+                ctx.fillText('❌ 抱歉，週日全店公休', 40, 110);
+            } else if (holiday) {
+                ctx.fillStyle = '#ef4444'; ctx.font = 'bold 22px sans-serif';
+                ctx.fillText(`❌ 抱歉，${holiday}`, 40, 110);
+            } else {
+                ctx.fillStyle = '#10b981'; ctx.font = 'bold 22px sans-serif';
+                ctx.fillText(`✅ 已選擇：${datePicker.value}`, 40, 110);
+            }
+
+            if (uiWarning) {
+                ctx.fillStyle = '#ef4444'; ctx.font = 'bold 18px sans-serif';
+                ctx.fillText(`⚠️ ${uiWarning}`, 40, 590);
+            }
+
+            drawButton(40, 640, 470, 60, '#3b82f6', '下一步：選擇店面/時間', true);
+        }
+
+        function drawStep2() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            step1Control.style.display = 'none';
+            
+            ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('步驟 2: 分店與時段', 40, 50);
+
+            ctx.fillStyle = '#1f2937'; ctx.font = 'bold 18px sans-serif';
+            ctx.fillText('1. 選擇預約分店:', 40, 95);
+            drawStoreOption(40, 115, '金旺昇', selectedStore === '金旺昇');
+            drawStoreOption(40, 185, '忍店', selectedStore === '忍店');
+            drawStoreOption(40, 255, '金力盛', selectedStore === '金力盛', isSaturday());
+
+            if (selectedStore) {
+                ctx.fillStyle = '#1f2937'; ctx.font = 'bold 18px sans-serif';
+                ctx.fillText('2. 選擇預約時段:', 40, 350);
+                
+                let slots = ['10:00', '12:00', '14:00', '16:00', '18:00'];
+                slots.forEach((t, i) => {
+                    let col = i%3, row = Math.floor(i/3);
+                    let sx = 40 + col*165, sy = 380 + row*75;
+                    let isSel = selectedTime === t;
+                    ctx.fillStyle = isSel ? '#fb923c' : '#f3f4f6';
+                    ctx.beginPath(); ctx.roundRect(sx, sy, 150, 60, 8); ctx.fill();
+                    ctx.strokeStyle = isSel ? '#ea580c' : '#d1d5db';
+                    ctx.strokeRect(sx, sy, 150, 60);
+                    ctx.fillStyle = isSel ? 'white' : '#4b5563';
+                    ctx.font = 'bold 22px sans-serif';
+                    ctx.fillText(t, sx+45, sy+38);
+                });
+            }
+
+            if (uiWarning) {
+                ctx.fillStyle = '#ef4444'; ctx.font = 'bold 18px sans-serif';
+                ctx.fillText(`⚠️ ${uiWarning}`, 40, 590);
+            }
+
+            drawButton(40, 640, 150, 60, '#9ca3af', '上一步', true);
+            drawButton(210, 640, 300, 60, '#3b82f6', '下一步：選項目', true);
+        }
+
+        function drawStep3() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('步驟 3: 選擇服務項目', 40, 50);
+
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 15px sans-serif';
+            ctx.fillText('※ 若選「賞車」，請於最後備註欄填寫欲看機型型號', 40, 85);
+            ctx.fillText('※ 若選「輪胎」且有指定胎型，請於備註欄填寫型號', 40, 110);
+            
+            serviceItems.forEach((item, i) => {
+                let col = i%2, row = Math.floor(i/2);
+                let x = 40 + col*240, y = 140 + row*45;
+                ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, 26, 26);
+                if (selectedItems[item]) { ctx.fillStyle = '#3b82f6'; ctx.fillRect(x+4, y+4, 18, 18); }
+                ctx.fillStyle = '#1f2937'; ctx.font = '19px sans-serif';
+                ctx.fillText(item, x+40, y+21);
+            });
+
+            drawButton(40, 640, 150, 60, '#9ca3af', '上一步', true);
+            drawButton(210, 640, 300, 60, '#3b82f6', '下一步：填資料', true);
+        }
+
+        function drawStep4() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            step4Control.style.display = 'block';
+            ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('步驟 4: 預約摘要確認', 40, 50);
+            
+            ctx.fillStyle = '#f9fafb'; ctx.fillRect(40, 75, 470, 140);
+            ctx.strokeStyle = '#e5e7eb'; ctx.strokeRect(40, 75, 470, 140);
+            
+            ctx.fillStyle = '#1e40af'; ctx.font = 'bold 18px sans-serif';
+            ctx.fillText(`📅 預約日期：${datePicker.value}`, 60, 115);
+            ctx.fillText(`📍 預約地點：${selectedStore} / ${selectedTime}`, 60, 150);
+            const items = Object.keys(selectedItems).filter(k=>selectedItems[k]).join('、');
+            ctx.font = '15px sans-serif'; ctx.fillStyle = '#4b5563';
+            ctx.fillText(`🔧 項目：${items.length > 30 ? items.substring(0, 28) + '...' : items}`, 60, 185);
+
+            drawButton(40, 640, 470, 60, '#9ca3af', '回上一步修改項目', true);
+        }
+
+        async function sendReservationToMake() {
+            loadingOverlay.style.display = 'flex';
+            const payload = {
+                reservationDate: datePicker.value,
+                store: selectedStore,
+                timeSlot: selectedTime,
+                services: Object.keys(selectedItems).filter(k => selectedItems[k]),
+                customer: {
+                    name: document.getElementById('userName').value,
+                    title: document.querySelector('input[name="userTitle"]:checked').value,
+                    phone: document.getElementById('userPhone').value,
+                    licensePlate: document.getElementById('licensePlate').value,
+                    mileage: document.getElementById('mileage').value || "未提供",
+                    email: document.getElementById('userEmail').value,
+                    carModel: document.getElementById('carModel').value,
+                    note: document.getElementById('otherText').value || "無"
+                }
+            };
+
+            try {
+                await fetch(makeWebhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                loadingOverlay.style.display = 'none';
+                currentStep = 5; drawSuccess();
+            } catch (error) {
+                loadingOverlay.style.display = 'none';
+                alert("預約發送失敗，請稍後再試。");
+            }
+        }
+
+        function drawSuccess() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            step4Control.style.display = 'none';
+            ctx.fillStyle = '#10b981'; ctx.font = 'bold 32px sans-serif';
+            ctx.fillText('✅ 預約申請已送出', 60, 100);
+            ctx.fillStyle = '#374151'; ctx.font = '18px sans-serif';
+            ctx.fillText('客服人員將儘速與您確認時段。', 60, 160);
+            ctx.fillText('請務必點擊下方加入官方 LINE：', 60, 195);
+            
+            ctx.fillStyle = '#06C755'; ctx.beginPath(); ctx.roundRect(60, 240, 430, 80, 12); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.font = 'bold 26px sans-serif';
+            ctx.fillText('👉 點此加入 LINE 聊天室', 120, 290);
+            
+            updateLineOverlay(); lineLinkOverlay.style.display = 'block';
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
+
+        function updateLineOverlay() {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = rect.width / canvas.width;
+            const scaleY = rect.height / canvas.height;
+            lineLinkOverlay.style.left = (60 * scaleX) + 'px';
+            lineLinkOverlay.style.top = (240 * scaleY) + 'px';
+            lineLinkOverlay.style.width = (430 * scaleX) + 'px';
+            lineLinkOverlay.style.height = (80 * scaleY) + 'px';
+        }
+
+        function drawStoreOption(x, y, name, isSel, isDisabled = false) {
+            ctx.fillStyle = isDisabled ? '#f9fafb' : (isSel ? '#3b82f6' : '#ffffff');
+            ctx.beginPath(); ctx.roundRect(x, y, 470, 60, 8); ctx.fill();
+            ctx.strokeStyle = isDisabled ? '#e5e7eb' : (isSel ? '#2563eb' : '#d1d5db');
+            ctx.stroke();
+            ctx.fillStyle = isDisabled ? '#9ca3af' : (isSel ? 'white' : '#1f2937');
+            ctx.font = 'bold 21px sans-serif';
+            ctx.fillText(name, x+20, y+38);
+            if (isDisabled) { ctx.font = '15px sans-serif'; ctx.fillText('(週六店休)', x+360, y+38); }
+        }
+
+        function drawButton(x, y, w, h, color, text, enabled) {
+            ctx.fillStyle = enabled ? color : '#e5e7eb';
+            ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill();
+            ctx.fillStyle = enabled ? 'white' : '#9ca3af';
+            ctx.font = 'bold 21px sans-serif';
+            const tw = ctx.measureText(text).width;
+            ctx.fillText(text, x + (w - tw)/2, y + 38);
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            if (currentStep === 1) {
+                if (x >= 40 && x <= 510 && y >= 640 && y <= 700) {
+                    if (isSunday() || checkHoliday()) { uiWarning = isSunday() ? "週日不營業" : checkHoliday(); drawStep1(); }
+                    else { uiWarning = ""; currentStep = 2; drawStep2(); }
+                }
+            } else if (currentStep === 2) {
+                if (x >= 40 && x <= 510) {
+                    if (y >= 115 && y <= 175) { selectedStore = '金旺昇'; selectedTime = null; }
+                    else if (y >= 185 && y <= 245) { selectedStore = '忍店'; selectedTime = null; }
+                    else if (y >= 255 && y <= 315 && !isSaturday()) { selectedStore = '金力盛'; selectedTime = null; }
+                }
+                if (selectedStore && y >= 380 && y <= 530) {
+                    ['10:00', '12:00', '14:00', '16:00', '18:00'].forEach((t, i) => {
+                        let col = i%3, row = Math.floor(i/3), sx = 40 + col*165, sy = 380 + row*75;
+                        if (x >= sx && x <= sx+150 && y >= sy && y <= sy+60) selectedTime = t;
+                    });
+                }
+                if (x >= 40 && x <= 150 && y >= 640 && y <= 700) { currentStep = 1; drawStep1(); }
+                else if (x >= 210 && x <= 510 && y >= 640 && y <= 700) {
+                    if (!selectedStore || !selectedTime) { uiWarning = "請選店面與時段"; drawStep2(); }
+                    else { currentStep = 3; drawStep3(); }
+                } else drawStep2();
+            } else if (currentStep === 3) {
+                serviceItems.forEach((item, i) => {
+                    let col = i%2, row = Math.floor(i/2), ix = 40 + col*240, iy = 140 + row*45;
+                    if (x >= ix && x <= ix + 200 && y >= iy && y <= iy + 45) selectedItems[item] = !selectedItems[item];
+                });
+                if (x >= 40 && x <= 190 && y >= 640 && y <= 700) { currentStep = 2; drawStep2(); }
+                else if (x >= 210 && x <= 510 && y >= 640 && y <= 700) {
+                    if (!Object.values(selectedItems).some(v => v)) drawStep3();
+                    else {
+                        if (selectedItems['清洗節流閥'] || selectedItems['清洗噴油嘴'] || selectedItems['前叉保養']) customModal.style.display = 'flex';
+                        else { currentStep = 4; drawStep4(); window.scrollTo({top: 400, behavior: 'smooth'}); }
+                    }
+                } else drawStep3();
+            } else if (currentStep === 4) {
+                if (x >= 40 && x <= 510 && y >= 640 && y <= 700) { currentStep = 3; drawStep3(); }
+            }
+        });
+
+        modalConfirmBtn.addEventListener('click', () => { customModal.style.display = 'none'; currentStep = 4; drawStep4(); window.scrollTo({top: 400, behavior: 'smooth'}); });
+        finalSubmitBtn.addEventListener('click', () => {
+            // 加入 userEmail 檢查
+            const reqFields = ['userName','userPhone','licensePlate','carModel', 'userEmail'];
+            const allFilled = reqFields.every(id => document.getElementById(id).value.trim() !== "");
+            
+            if (!allFilled) {
+                errorMsg.classList.remove('hidden');
+            } else {
+                errorMsg.classList.add('hidden');
+                sendReservationToMake();
+            }
+        });
+
+        datePicker.addEventListener('change', () => { if(currentStep === 1) drawStep1(); });
+        window.addEventListener('resize', () => { if (currentStep === 5) updateLineOverlay(); });
+        drawStep1();
+    </script>
+</body>
+</html>
