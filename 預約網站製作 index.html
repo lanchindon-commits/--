@@ -195,30 +195,39 @@
         // ═══════════════════════════════════════════════
         // ⚠️ 請將下方換成你的 LIFF ID
         // ═══════════════════════════════════════════════
-       const LIFF_ID = "2009551033-yyYoxzlN";
+      const LIFF_ID = "2009551033-yyYoxzlN";
 
-        // ── LIFF 全域變數 ──
-        window.lineUserId   = "";
-        window.lineUserName = "";
+// 全域變數（給後面 webhook 用）
+window.lineUserId = "";
+window.lineUserName = "";
 
-        // ── LIFF 初始化 ──
-        async function initLiff() {
-            if (!LIFF_ID || LIFF_ID === "YOUR_LIFF_ID_HERE") return;
-            try {
-                await liff.init({ liffId: LIFF_ID });
-                if (!liff.isLoggedIn()) {
-                    liff.login({ redirectUri: location.href });
-                    return;
-                }
-                const profile = await liff.getProfile();
-                window.lineUserId   = profile.userId;        // ✅ LINE User ID
-                window.lineUserName = profile.displayName;   // ✅ LINE 顯示名稱
-                console.log("✅ LIFF userId:", window.lineUserId);
-            } catch (err) {
-                // 非 LINE 環境靜默略過，表單仍可正常使用
-                console.warn("LIFF 略過（非 LINE 環境）:", err.message);
-            }
-        }
+// ═════════════════════════════════════
+// LIFF 初始化
+// ═════════════════════════════════════
+async function initLiff() {
+  try {
+    // 初始化 LIFF
+    await liff.init({ liffId: LIFF_ID });
+
+    // 未登入 → 導去登入
+    if (!liff.isLoggedIn()) {
+      liff.login({ redirectUri: location.href });
+      return;
+    }
+
+    // 已登入 → 取得使用者資料
+    const profile = await liff.getProfile();
+
+    window.lineUserId = profile.userId;
+    window.lineUserName = profile.displayName;
+
+    console.log("✅ LIFF userId:", window.lineUserId);
+    console.log("✅ LIFF userName:", window.lineUserName);
+
+  } catch (err) {
+    console.warn("⚠️ LIFF 初始化失敗（可能非 LINE 環境）：", err);
+  }
+}
 
         // ── 原有程式碼（完全保留）──
         const makeWebhookUrl = "https://hook.us2.make.com/zckx5waq6hex9uk74n4wg15fvdy02u2r";
