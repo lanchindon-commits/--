@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>機車預約服務網站</title>
-    <!-- LIFF SDK ✅ -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <!-- 載入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #container {
@@ -87,16 +85,12 @@
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans pb-6">
-
-    <!-- 載入中遮罩 -->
     <div id="loadingOverlay">
         <div class="flex flex-col items-center bg-white p-6 rounded-lg">
             <div class="spinner"></div>
             <p id="loadingText" class="mt-4 text-blue-600 font-bold text-sm">預約處理中，請稍候...</p>
         </div>
     </div>
-
-    <!-- 自定義提示彈窗 -->
     <div id="customModal">
         <div class="modal-content">
             <div class="text-amber-500 mb-4">
@@ -113,11 +107,8 @@
             </button>
         </div>
     </div>
-
     <div id="container">
         <h1 class="text-xl font-bold text-center text-blue-700 py-3 w-full">機車服務預約系統</h1>
-
-        <!-- 步驟 1 日期選擇區 -->
         <div id="step1Control" class="w-full bg-blue-50 p-3 rounded-t-lg border-t border-x border-blue-200 box-border">
             <h3 class="text-base font-semibold mb-2 text-blue-600">步驟 1: 選擇日期</h3>
             <div class="w-full overflow-hidden">
@@ -130,18 +121,13 @@
                 <p class="text-red-600">※ 元旦/清明/端午/中秋公休</p>
             </div>
         </div>
-
-        <!-- 畫布互動區 -->
         <div class="relative w-full">
             <canvas id="reservationCanvas" width="550" height="730"></canvas>
             <a id="lineLinkOverlay" href="https://lin.ee/E0OUGxq" target="_blank"></a>
         </div>
-
-        <!-- 步驟 4 填寫資料區 -->
         <div id="htmlInputs" class="w-full">
             <div id="step4Control" style="display:none;" class="bg-white p-5 rounded-b-lg shadow-md border-x border-b border-gray-200">
                 <h3 class="text-lg font-bold mb-4 text-blue-700 border-b pb-2 text-center">步驟 4: 填寫聯繫資料</h3>
-
                 <div class="form-control">
                     <label>稱謂:</label>
                     <div class="flex space-x-6 p-2 bg-gray-50 rounded">
@@ -181,55 +167,38 @@
                     <label>其他備註</label>
                     <textarea id="otherText" rows="2" placeholder="賞車或其他需求、指定輪胎等說明..."></textarea>
                 </div>
-
                 <p id="errorMsg" class="text-xs text-red-600 font-bold mb-4 hidden text-center">⚠️ 請務必填寫所有帶星號 (*) 的欄位</p>
-
                 <button id="finalSubmitBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-lg text-lg shadow-lg transition-all active:scale-95">
                     確認資料無誤，立即預約送出
                 </button>
             </div>
         </div>
     </div>
-
     <script>
-        // ═══════════════════════════════════════════════
-        // ⚠️ 請將下方換成你的 LIFF ID
-        // ═══════════════════════════════════════════════
-      const LIFF_ID = "2009551033-yyYoxzlN";
+        const LIFF_ID = "2009551033-yyYoxzlN";
+        window.lineUserId = "";
+        window.lineUserName = "";
 
-// 全域變數（給後面 webhook 用）
-window.lineUserId = "";
-window.lineUserName = "";
+        async function initLiff() {
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    if (liff.isInClient()) {
+                        // 只在 LINE App 內才跳轉登入，瀏覽器開可正常預覽
+                        liff.login({ redirectUri: location.href });
+                    }
+                    return;
+                }
+                const profile = await liff.getProfile();
+                window.lineUserId = profile.userId;
+                window.lineUserName = profile.displayName;
+                console.log("✅ LIFF userId:", window.lineUserId);
+                console.log("✅ LIFF userName:", window.lineUserName);
+            } catch (err) {
+                console.warn("⚠️ LIFF 初始化失敗（可能非 LINE 環境）：", err);
+            }
+        }
 
-// ═════════════════════════════════════
-// LIFF 初始化
-// ═════════════════════════════════════
-async function initLiff() {
-  try {
-    // 初始化 LIFF
-    await liff.init({ liffId: LIFF_ID });
-
-    // 未登入 → 導去登入
-    if (!liff.isLoggedIn()) {
-      liff.login({ redirectUri: location.href });
-      return;
-    }
-
-    // 已登入 → 取得使用者資料
-    const profile = await liff.getProfile();
-
-    window.lineUserId = profile.userId;
-    window.lineUserName = profile.displayName;
-
-    console.log("✅ LIFF userId:", window.lineUserId);
-    console.log("✅ LIFF userName:", window.lineUserName);
-
-  } catch (err) {
-    console.warn("⚠️ LIFF 初始化失敗（可能非 LINE 環境）：", err);
-  }
-}
-
-        // ── 原有程式碼（完全保留）──
         const makeWebhookUrl = "https://hook.us2.make.com/zckx5waq6hex9uk74n4wg15fvdy02u2r";
         const canvas = document.getElementById('reservationCanvas');
         const ctx = canvas.getContext('2d');
@@ -242,37 +211,37 @@ async function initLiff() {
         const finalSubmitBtn = document.getElementById('finalSubmitBtn');
         const customModal = document.getElementById('customModal');
         const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+
         let currentStep = 1;
         const serviceItems = ['輪胎','煞車皮','電池','機油','火星塞','皮帶','空濾','碟盤','傳動','清洗節流閥','清洗噴油嘴','煞車油','驗排氣','前叉保養','賞車','其它'];
-
         let selectedStore = null;
         let selectedTime = null;
         let selectedItems = {};
         let uiWarning = "";
 
+        // ✅ 新增：店家地址對照表
+        const storeAddresses = {
+            '金旺昇': '新莊區中正路833號',
+            '忍店':   '新莊區福營路431-8號',
+            '金力盛': '新莊區新樹路148號'
+        };
+
         const today = new Date();
-        // ✅ 修正：只允許明天起 30 天，今天不可預約
         const tomorrow = new Date(today);
         tomorrow.setDate(today.getDate() + 1);
         const thirtyDaysLater = new Date(tomorrow);
         thirtyDaysLater.setDate(tomorrow.getDate() + 30);
 
-        // 格式化日期為 YYYY-MM-DD（使用本地時區，避免 UTC 偏移造成日期跑掉）
         function formatLocalDate(d) {
             return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         }
-
         datePicker.min   = formatLocalDate(tomorrow);
         datePicker.max   = formatLocalDate(thirtyDaysLater);
         datePicker.value = formatLocalDate(tomorrow);
 
         function isSunday()   { return new Date(datePicker.value + 'T00:00:00').getDay() === 0; }
         function isSaturday() { return new Date(datePicker.value + 'T00:00:00').getDay() === 6; }
-
-        // ✅ 修正：禁止預約今天
-        function isToday() {
-            return datePicker.value === formatLocalDate(today);
-        }
+        function isToday()    { return datePicker.value === formatLocalDate(today); }
 
         function checkHoliday() {
             const d = new Date(datePicker.value + 'T00:00:00');
@@ -292,12 +261,9 @@ async function initLiff() {
             step1Control.style.display = 'block';
             step4Control.style.display = 'none';
             lineLinkOverlay.style.display = 'none';
-
             ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 26px sans-serif';
             ctx.fillText('請確認預約日期', 40, 60);
-
             const holiday = checkHoliday();
-            // ✅ 加入今天判斷
             if (isToday()) {
                 ctx.fillStyle = '#ef4444'; ctx.font = 'bold 22px sans-serif';
                 ctx.fillText('❌ 不開放當天預約，請選明天起', 40, 110);
@@ -324,29 +290,32 @@ async function initLiff() {
             ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 26px sans-serif';
             ctx.fillText('步驟 2: 分店與時段', 40, 50);
             ctx.fillStyle = '#1f2937'; ctx.font = 'bold 18px sans-serif';
-            ctx.fillText('1. 選擇預約分店:', 40, 95);
-            drawStoreOption(40, 115, '金旺昇', selectedStore === '金旺昇');
-            drawStoreOption(40, 185, '忍店', selectedStore === '忍店');
-            drawStoreOption(40, 255, '金力盛', selectedStore === '金力盛', isSaturday());
+            ctx.fillText('1. 選擇預約分店:', 40, 90);
+
+            // ✅ 更新：每個店家按鈕高度改為 70px，間距 10px
+            drawStoreOption(40, 108,  '金旺昇', selectedStore === '金旺昇');
+            drawStoreOption(40, 188,  '忍店',   selectedStore === '忍店');
+            drawStoreOption(40, 268,  '金力盛', selectedStore === '金力盛', isSaturday());
+
             if (selectedStore) {
                 ctx.fillStyle = '#1f2937'; ctx.font = 'bold 18px sans-serif';
-                ctx.fillText('2. 選擇預約時段:', 40, 350);
+                ctx.fillText('2. 選擇預約時段:', 40, 362);
                 let slots = ['10:00','12:00','14:00','16:00','18:00'];
                 slots.forEach((t, i) => {
-                    let col = i%3, row = Math.floor(i/3);
-                    let sx = 40 + col*165, sy = 380 + row*75;
+                    let col = i % 3, row = Math.floor(i / 3);
+                    let sx = 40 + col * 165, sy = 385 + row * 75;
                     let isSel = selectedTime === t;
                     ctx.fillStyle = isSel ? '#fb923c' : '#f3f4f6';
                     ctx.beginPath(); ctx.roundRect(sx, sy, 150, 60, 8); ctx.fill();
                     ctx.strokeStyle = isSel ? '#ea580c' : '#d1d5db'; ctx.strokeRect(sx, sy, 150, 60);
                     ctx.fillStyle = isSel ? 'white' : '#4b5563';
                     ctx.font = 'bold 22px sans-serif';
-                    ctx.fillText(t, sx+45, sy+38);
+                    ctx.fillText(t, sx + 45, sy + 38);
                 });
             }
             if (uiWarning) {
                 ctx.fillStyle = '#ef4444'; ctx.font = 'bold 18px sans-serif';
-                ctx.fillText(`⚠️ ${uiWarning}`, 40, 590);
+                ctx.fillText(`⚠️ ${uiWarning}`, 40, 592);
             }
             drawButton(40, 640, 150, 60, '#9ca3af', '上一步', true);
             drawButton(210, 640, 300, 60, '#3b82f6', '下一步：選項目', true);
@@ -360,12 +329,12 @@ async function initLiff() {
             ctx.fillText('※ 若選「賞車」，請於最後備註欄填寫欲看機型型號', 40, 85);
             ctx.fillText('※ 若選「輪胎」且有指定胎型，請於備註欄填寫型號', 40, 110);
             serviceItems.forEach((item, i) => {
-                let col = i%2, row = Math.floor(i/2);
-                let x = 40 + col*240, y = 140 + row*45;
+                let col = i % 2, row = Math.floor(i / 2);
+                let x = 40 + col * 240, y = 140 + row * 45;
                 ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2; ctx.strokeRect(x, y, 26, 26);
                 if (selectedItems[item]) { ctx.fillStyle = '#3b82f6'; ctx.fillRect(x+4, y+4, 18, 18); }
                 ctx.fillStyle = '#1f2937'; ctx.font = '19px sans-serif';
-                ctx.fillText(item, x+40, y+21);
+                ctx.fillText(item, x + 40, y + 21);
             });
             drawButton(40, 640, 150, 60, '#9ca3af', '上一步', true);
             drawButton(210, 640, 300, 60, '#3b82f6', '下一步：填資料', true);
@@ -381,9 +350,9 @@ async function initLiff() {
             ctx.fillStyle = '#1e40af'; ctx.font = 'bold 18px sans-serif';
             ctx.fillText(`📅 預約日期：${datePicker.value}`, 60, 115);
             ctx.fillText(`📍 預約地點：${selectedStore} / ${selectedTime}`, 60, 150);
-            const items = Object.keys(selectedItems).filter(k=>selectedItems[k]).join('、');
+            const items = Object.keys(selectedItems).filter(k => selectedItems[k]).join('、');
             ctx.font = '15px sans-serif'; ctx.fillStyle = '#4b5563';
-            ctx.fillText(`🔧 項目：${items.length > 30 ? items.substring(0,28)+'...' : items}`, 60, 185);
+            ctx.fillText(`🔧 項目：${items.length > 30 ? items.substring(0, 28) + '...' : items}`, 60, 185);
             drawButton(40, 640, 470, 60, '#9ca3af', '回上一步修改項目', true);
         }
 
@@ -394,7 +363,6 @@ async function initLiff() {
                 store           : selectedStore,
                 timeSlot        : selectedTime,
                 services        : Object.keys(selectedItems).filter(k => selectedItems[k]),
-                // ✅ 新增 LINE 身份資訊
                 lineUserId      : window.lineUserId,
                 lineUserName    : window.lineUserName,
                 customer: {
@@ -434,7 +402,7 @@ async function initLiff() {
             ctx.fillStyle = 'white'; ctx.font = 'bold 26px sans-serif';
             ctx.fillText('👉 點此加入 LINE 聊天室', 120, 290);
             updateLineOverlay(); lineLinkOverlay.style.display = 'block';
-            window.scrollTo({top: 0, behavior: 'smooth'});
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         function updateLineOverlay() {
@@ -447,13 +415,30 @@ async function initLiff() {
             lineLinkOverlay.style.height = (80 * scaleY) + 'px';
         }
 
+        // ✅ 修改：drawStoreOption 加入地址第二行，高度改為 70px
         function drawStoreOption(x, y, name, isSel, isDisabled = false) {
+            const btnH = 70;
             ctx.fillStyle = isDisabled ? '#f9fafb' : (isSel ? '#3b82f6' : '#ffffff');
-            ctx.beginPath(); ctx.roundRect(x, y, 470, 60, 8); ctx.fill();
-            ctx.strokeStyle = isDisabled ? '#e5e7eb' : (isSel ? '#2563eb' : '#d1d5db'); ctx.stroke();
+            ctx.beginPath(); ctx.roundRect(x, y, 470, btnH, 8); ctx.fill();
+            ctx.strokeStyle = isDisabled ? '#e5e7eb' : (isSel ? '#2563eb' : '#d1d5db');
+            ctx.lineWidth = 1.5; ctx.stroke();
+
+            // 店名
             ctx.fillStyle = isDisabled ? '#9ca3af' : (isSel ? 'white' : '#1f2937');
-            ctx.font = 'bold 21px sans-serif'; ctx.fillText(name, x+20, y+38);
-            if (isDisabled) { ctx.font = '15px sans-serif'; ctx.fillText('(週六店休)', x+360, y+38); }
+            ctx.font = 'bold 21px sans-serif';
+            ctx.fillText(name, x + 20, y + 28);
+
+            // 地址
+            ctx.font = '14px sans-serif';
+            ctx.fillStyle = isDisabled ? '#d1d5db' : (isSel ? 'rgba(255,255,255,0.85)' : '#6b7280');
+            ctx.fillText('📍 ' + storeAddresses[name], x + 20, y + 52);
+
+            // 週六店休標記
+            if (isDisabled) {
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillStyle = '#f87171';
+                ctx.fillText('（週六店休）', x + 340, y + 28);
+            }
         }
 
         function drawButton(x, y, w, h, color, text, enabled) {
@@ -462,7 +447,7 @@ async function initLiff() {
             ctx.fillStyle = enabled ? 'white' : '#9ca3af';
             ctx.font = 'bold 21px sans-serif';
             const tw = ctx.measureText(text).width;
-            ctx.fillText(text, x + (w - tw)/2, y + 38);
+            ctx.fillText(text, x + (w - tw) / 2, y + 38);
         }
 
         canvas.addEventListener('click', (e) => {
@@ -472,48 +457,51 @@ async function initLiff() {
 
             if (currentStep === 1) {
                 if (x >= 40 && x <= 510 && y >= 640 && y <= 700) {
-                    // ✅ 加入今天不可預約的判斷
                     if (isToday()) {
-                        uiWarning = "不開放當天預約，請選明天以後的日期";
-                        drawStep1();
+                        uiWarning = "不開放當天預約，請選明天以後的日期"; drawStep1();
                     } else if (isSunday() || checkHoliday()) {
-                        uiWarning = isSunday() ? "週日不營業" : checkHoliday();
-                        drawStep1();
+                        uiWarning = isSunday() ? "週日不營業" : checkHoliday(); drawStep1();
                     } else {
                         uiWarning = ""; currentStep = 2; drawStep2();
                     }
                 }
             } else if (currentStep === 2) {
+                // ✅ 更新：店家點擊區域對應新的 y 座標（高度 70px）
                 if (x >= 40 && x <= 510) {
-                    if (y >= 115 && y <= 175) { selectedStore = '金旺昇'; selectedTime = null; }
-                    else if (y >= 185 && y <= 245) { selectedStore = '忍店'; selectedTime = null; }
-                    else if (y >= 255 && y <= 315 && !isSaturday()) { selectedStore = '金力盛'; selectedTime = null; }
+                    if      (y >= 108 && y <= 178) { selectedStore = '金旺昇'; selectedTime = null; }
+                    else if (y >= 188 && y <= 258) { selectedStore = '忍店';   selectedTime = null; }
+                    else if (y >= 268 && y <= 338 && !isSaturday()) { selectedStore = '金力盛'; selectedTime = null; }
                 }
-                if (selectedStore && y >= 380 && y <= 530) {
+                // ✅ 更新：時段點擊區域對應新的 y 座標（從 385 開始）
+                if (selectedStore && y >= 385 && y <= 535) {
                     ['10:00','12:00','14:00','16:00','18:00'].forEach((t, i) => {
-                        let col = i%3, row = Math.floor(i/3), sx = 40+col*165, sy = 380+row*75;
-                        if (x >= sx && x <= sx+150 && y >= sy && y <= sy+60) selectedTime = t;
+                        let col = i % 3, row = Math.floor(i / 3);
+                        let sx = 40 + col * 165, sy = 385 + row * 75;
+                        if (x >= sx && x <= sx + 150 && y >= sy && y <= sy + 60) selectedTime = t;
                     });
                 }
-                if (x >= 40 && x <= 150 && y >= 640 && y <= 700) { currentStep = 1; drawStep1(); }
+                if      (x >= 40  && x <= 150 && y >= 640 && y <= 700) { currentStep = 1; drawStep1(); }
                 else if (x >= 210 && x <= 510 && y >= 640 && y <= 700) {
                     if (!selectedStore || !selectedTime) { uiWarning = "請選店面與時段"; drawStep2(); }
                     else { currentStep = 3; drawStep3(); }
                 } else drawStep2();
+
             } else if (currentStep === 3) {
                 serviceItems.forEach((item, i) => {
-                    let col = i%2, row = Math.floor(i/2), ix = 40+col*240, iy = 140+row*45;
-                    if (x >= ix && x <= ix+200 && y >= iy && y <= iy+45) selectedItems[item] = !selectedItems[item];
+                    let col = i % 2, row = Math.floor(i / 2);
+                    let ix = 40 + col * 240, iy = 140 + row * 45;
+                    if (x >= ix && x <= ix + 200 && y >= iy && y <= iy + 45) selectedItems[item] = !selectedItems[item];
                 });
-                if (x >= 40 && x <= 190 && y >= 640 && y <= 700) { currentStep = 2; drawStep2(); }
+                if      (x >= 40  && x <= 190 && y >= 640 && y <= 700) { currentStep = 2; drawStep2(); }
                 else if (x >= 210 && x <= 510 && y >= 640 && y <= 700) {
                     if (!Object.values(selectedItems).some(v => v)) drawStep3();
                     else {
                         if (selectedItems['清洗節流閥'] || selectedItems['清洗噴油嘴'] || selectedItems['前叉保養'])
                             customModal.style.display = 'flex';
-                        else { currentStep = 4; drawStep4(); window.scrollTo({top:400, behavior:'smooth'}); }
+                        else { currentStep = 4; drawStep4(); window.scrollTo({ top: 400, behavior: 'smooth' }); }
                     }
                 } else drawStep3();
+
             } else if (currentStep === 4) {
                 if (x >= 40 && x <= 510 && y >= 640 && y <= 700) { currentStep = 3; drawStep3(); }
             }
@@ -522,7 +510,7 @@ async function initLiff() {
         modalConfirmBtn.addEventListener('click', () => {
             customModal.style.display = 'none';
             currentStep = 4; drawStep4();
-            window.scrollTo({top:400, behavior:'smooth'});
+            window.scrollTo({ top: 400, behavior: 'smooth' });
         });
 
         finalSubmitBtn.addEventListener('click', () => {
@@ -539,9 +527,8 @@ async function initLiff() {
         datePicker.addEventListener('change', () => { if (currentStep === 1) drawStep1(); });
         window.addEventListener('resize', () => { if (currentStep === 5) updateLineOverlay(); });
 
-        // ── 啟動 ──
         drawStep1();
-        initLiff();   // ✅ LIFF 初始化
+        initLiff();
     </script>
 </body>
 </html>
