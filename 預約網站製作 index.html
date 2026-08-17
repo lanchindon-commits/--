@@ -178,7 +178,6 @@
         const LIFF_ID = "2009551033-yyYoxzlN";
         window.lineUserId = "";
         window.lineUserName = "";
-
         async function initLiff() {
             try {
                 await liff.init({ liffId: LIFF_ID });
@@ -198,7 +197,6 @@
                 console.warn("⚠️ LIFF 初始化失敗（可能非 LINE 環境）：", err);
             }
         }
-
         const makeWebhookUrl = "https://hook.us2.make.com/zckx5waq6hex9uk74n4wg15fvdy02u2r";
         const canvas = document.getElementById('reservationCanvas');
         const ctx = canvas.getContext('2d');
@@ -211,38 +209,48 @@
         const finalSubmitBtn = document.getElementById('finalSubmitBtn');
         const customModal = document.getElementById('customModal');
         const modalConfirmBtn = document.getElementById('modalConfirmBtn');
-
         let currentStep = 1;
         const serviceItems = ['輪胎','煞車皮','電池','機油','火星塞','皮帶','空濾','碟盤','傳動','清洗節流閥','清洗噴油嘴','煞車油','驗排氣','前叉保養','賞車','其它'];
         let selectedStore = null;
         let selectedTime = null;
         let selectedItems = {};
         let uiWarning = "";
-
         // ✅ 新增：店家地址對照表
         const storeAddresses = {
             '金旺昇': '新莊區中正路833號',
             '忍店':   '新莊區福營路431-8號',
             '金力盛': '新莊區新樹路148號'
         };
-
         const today = new Date();
         const tomorrow = new Date(today);
         tomorrow.setDate(today.getDate() + 1);
         const thirtyDaysLater = new Date(tomorrow);
         thirtyDaysLater.setDate(tomorrow.getDate() + 30);
-
         function formatLocalDate(d) {
             return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         }
         datePicker.min   = formatLocalDate(tomorrow);
         datePicker.max   = formatLocalDate(thirtyDaysLater);
         datePicker.value = formatLocalDate(tomorrow);
-
         function isSunday()   { return new Date(datePicker.value + 'T00:00:00').getDay() === 0; }
         function isSaturday() { return new Date(datePicker.value + 'T00:00:00').getDay() === 6; }
         function isToday()    { return datePicker.value === formatLocalDate(today); }
-
+        // ✅ 修正：明確檢查是否為「今天(含)以前」的日期（涵蓋過去日期與當天）
+        // 原本只用 isToday() 判斷，若使用者手動輸入、瀏覽器自動填入或 LINE 內建瀏覽器
+        // 未確實套用 <input min> 限制，選到「今天以前」的日期會被誤判為合法而放行。
+        function isBeforeTomorrow() {
+            if (!datePicker.value) return true;
+            const selected = new Date(datePicker.value + 'T00:00:00');
+            const tmrwStart = new Date(formatLocalDate(tomorrow) + 'T00:00:00');
+            return selected < tmrwStart;
+        }
+        // ✅ 新增：同理，明確檢查是否超過可預約上限（30天後）
+        function isAfterMax() {
+            if (!datePicker.value) return false;
+            const selected = new Date(datePicker.value + 'T00:00:00');
+            const maxStart = new Date(formatLocalDate(thirtyDaysLater) + 'T00:00:00');
+            return selected > maxStart;
+        }
         function checkHoliday() {
             const d = new Date(datePicker.value + 'T00:00:00');
             const md = `${d.getMonth()+1}/${d.getDate()}`;
@@ -255,7 +263,6 @@
             }
             return null;
         }
-
         function drawStep1() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             step1Control.style.display = 'block';
@@ -264,9 +271,12 @@
             ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 26px sans-serif';
             ctx.fillText('請確認預約日期', 40, 60);
             const holiday = checkHoliday();
-            if (isToday()) {
+            if (isBeforeTomorrow()) {
                 ctx.fillStyle = '#ef4444'; ctx.font = 'bold 22px sans-serif';
-                ctx.fillText('❌ 不開放當天預約，請選明天起', 40, 110);
+                ctx.fillText('❌ 不開放此日期預約，請選明天起的日期', 40, 110);
+            } else if (isAfterMax()) {
+                ctx.fillStyle = '#ef4444'; ctx.font = 'bold 22px sans-serif';
+                ctx.fillText('❌ 僅開放明天起30天內的預約', 40, 110);
             } else if (isSunday()) {
                 ctx.fillStyle = '#ef4444'; ctx.font = 'bold 22px sans-serif';
                 ctx.fillText('❌ 抱歉，週日全店公休', 40, 110);
@@ -283,7 +293,6 @@
             }
             drawButton(40, 640, 470, 60, '#3b82f6', '下一步：選擇店面/時間', true);
         }
-
         function drawStep2() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             step1Control.style.display = 'none';
@@ -291,12 +300,10 @@
             ctx.fillText('步驟 2: 分店與時段', 40, 50);
             ctx.fillStyle = '#1f2937'; ctx.font = 'bold 18px sans-serif';
             ctx.fillText('1. 選擇預約分店:', 40, 90);
-
             // ✅ 更新：每個店家按鈕高度改為 70px，間距 10px
             drawStoreOption(40, 108,  '金旺昇', selectedStore === '金旺昇');
             drawStoreOption(40, 188,  '忍店',   selectedStore === '忍店');
             drawStoreOption(40, 268,  '金力盛', selectedStore === '金力盛', isSaturday());
-
             if (selectedStore) {
                 ctx.fillStyle = '#1f2937'; ctx.font = 'bold 18px sans-serif';
                 ctx.fillText('2. 選擇預約時段:', 40, 362);
@@ -320,7 +327,6 @@
             drawButton(40, 640, 150, 60, '#9ca3af', '上一步', true);
             drawButton(210, 640, 300, 60, '#3b82f6', '下一步：選項目', true);
         }
-
         function drawStep3() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 26px sans-serif';
@@ -339,7 +345,6 @@
             drawButton(40, 640, 150, 60, '#9ca3af', '上一步', true);
             drawButton(210, 640, 300, 60, '#3b82f6', '下一步：填資料', true);
         }
-
         function drawStep4() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             step4Control.style.display = 'block';
@@ -355,7 +360,6 @@
             ctx.fillText(`🔧 項目：${items.length > 30 ? items.substring(0, 28) + '...' : items}`, 60, 185);
             drawButton(40, 640, 470, 60, '#9ca3af', '回上一步修改項目', true);
         }
-
         async function sendReservationToMake() {
             loadingOverlay.style.display = 'flex';
             const payload = {
@@ -389,7 +393,6 @@
                 alert("預約發送失敗，請稍後再試。");
             }
         }
-
         function drawSuccess() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             step4Control.style.display = 'none';
@@ -404,7 +407,6 @@
             updateLineOverlay(); lineLinkOverlay.style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-
         function updateLineOverlay() {
             const rect = canvas.getBoundingClientRect();
             const scaleX = rect.width / canvas.width;
@@ -414,7 +416,6 @@
             lineLinkOverlay.style.width  = (430 * scaleX) + 'px';
             lineLinkOverlay.style.height = (80 * scaleY) + 'px';
         }
-
         // ✅ 修改：drawStoreOption 加入地址第二行，高度改為 70px
         function drawStoreOption(x, y, name, isSel, isDisabled = false) {
             const btnH = 70;
@@ -422,17 +423,14 @@
             ctx.beginPath(); ctx.roundRect(x, y, 470, btnH, 8); ctx.fill();
             ctx.strokeStyle = isDisabled ? '#e5e7eb' : (isSel ? '#2563eb' : '#d1d5db');
             ctx.lineWidth = 1.5; ctx.stroke();
-
             // 店名
             ctx.fillStyle = isDisabled ? '#9ca3af' : (isSel ? 'white' : '#1f2937');
             ctx.font = 'bold 21px sans-serif';
             ctx.fillText(name, x + 20, y + 28);
-
             // 地址
             ctx.font = '14px sans-serif';
             ctx.fillStyle = isDisabled ? '#d1d5db' : (isSel ? 'rgba(255,255,255,0.85)' : '#6b7280');
             ctx.fillText('📍 ' + storeAddresses[name], x + 20, y + 52);
-
             // 週六店休標記
             if (isDisabled) {
                 ctx.font = 'bold 14px sans-serif';
@@ -440,7 +438,6 @@
                 ctx.fillText('（週六店休）', x + 340, y + 28);
             }
         }
-
         function drawButton(x, y, w, h, color, text, enabled) {
             ctx.fillStyle = enabled ? color : '#e5e7eb';
             ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill();
@@ -449,16 +446,16 @@
             const tw = ctx.measureText(text).width;
             ctx.fillText(text, x + (w - tw) / 2, y + 38);
         }
-
         canvas.addEventListener('click', (e) => {
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) * (canvas.width / rect.width);
             const y = (e.clientY - rect.top)  * (canvas.height / rect.height);
-
             if (currentStep === 1) {
                 if (x >= 40 && x <= 510 && y >= 640 && y <= 700) {
-                    if (isToday()) {
-                        uiWarning = "不開放當天預約，請選明天以後的日期"; drawStep1();
+                    if (isBeforeTomorrow()) {
+                        uiWarning = "不開放此日期預約，請選明天以後的日期"; drawStep1();
+                    } else if (isAfterMax()) {
+                        uiWarning = "僅開放明天起30天內的預約"; drawStep1();
                     } else if (isSunday() || checkHoliday()) {
                         uiWarning = isSunday() ? "週日不營業" : checkHoliday(); drawStep1();
                     } else {
@@ -485,7 +482,6 @@
                     if (!selectedStore || !selectedTime) { uiWarning = "請選店面與時段"; drawStep2(); }
                     else { currentStep = 3; drawStep3(); }
                 } else drawStep2();
-
             } else if (currentStep === 3) {
                 serviceItems.forEach((item, i) => {
                     let col = i % 2, row = Math.floor(i / 2);
@@ -501,19 +497,24 @@
                         else { currentStep = 4; drawStep4(); window.scrollTo({ top: 400, behavior: 'smooth' }); }
                     }
                 } else drawStep3();
-
             } else if (currentStep === 4) {
                 if (x >= 40 && x <= 510 && y >= 640 && y <= 700) { currentStep = 3; drawStep3(); }
             }
         });
-
         modalConfirmBtn.addEventListener('click', () => {
             customModal.style.display = 'none';
             currentStep = 4; drawStep4();
             window.scrollTo({ top: 400, behavior: 'smooth' });
         });
-
         finalSubmitBtn.addEventListener('click', () => {
+            // ✅ 新增：送出前的最後一道日期防線，避免透過任何方式（手動輸入、
+            // 瀏覽器自動填、LINE 內建瀏覽器未套用 min 限制等）繞過步驟一的檢查，
+            // 仍把過去或超出範圍的日期送到 Make.com。
+            if (isBeforeTomorrow() || isAfterMax() || isSunday() || checkHoliday()) {
+                currentStep = 1; uiWarning = "預約日期已不符資格，請重新選擇日期"; drawStep1();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
             const reqFields = ['userName','userPhone','licensePlate','carModel','userEmail'];
             const allFilled = reqFields.every(id => document.getElementById(id).value.trim() !== "");
             if (!allFilled) {
@@ -523,10 +524,8 @@
                 sendReservationToMake();
             }
         });
-
         datePicker.addEventListener('change', () => { if (currentStep === 1) drawStep1(); });
         window.addEventListener('resize', () => { if (currentStep === 5) updateLineOverlay(); });
-
         drawStep1();
         initLiff();
     </script>
