@@ -182,6 +182,17 @@
         async function initLiff() {
             try {
                 await liff.init({ liffId: LIFF_ID });
+                // ✅ 新增：若不是在 LINE App 的 LIFF 環境內開啟（代表客人是從外部連結
+                // 直接點進來，沒有經過 LIFF 入口），就自動導向 LIFF 網址，讓 LINE 官方
+                // 幫忙處理登入、開啟 LINE App 或走外部瀏覽器登入流程。
+                // 用網址參數 redirected=1 標記「已經導向過一次」，LIFF 會把這個參數原封
+                // 不動地帶回本頁，避免造成無限重新導向的迴圈。
+                const _params = new URLSearchParams(location.search);
+                const _alreadyRedirected = _params.get('redirected') === '1';
+                if (!_alreadyRedirected && !liff.isInClient()) {
+                    location.replace('https://liff.line.me/' + LIFF_ID + '?redirected=1');
+                    return; // 即將跳轉，不再執行後續登入/畫面邏輯
+                }
                 if (!liff.isLoggedIn()) {
                     if (liff.isInClient()) {
                         // 只在 LINE App 內才跳轉登入，瀏覽器開可正常預覽
