@@ -150,6 +150,7 @@
                     <div class="form-control">
                         <label>車牌號碼<span class="text-red-500">*</span></label>
                         <input type="text" id="licensePlate" placeholder="ABC-1234">
+                        <div id="plateHint" class="hidden"></div>
                     </div>
                     <div class="form-control">
                         <label>目前公里數 <span class="text-gray-400 font-normal">(選填)</span></label>
@@ -205,6 +206,7 @@
                 window.lineUserName = profile.displayName;
                 console.log("✅ LIFF userId:", window.lineUserId);
                 console.log("✅ LIFF userName:", window.lineUserName);
+                prefillBoundPlates(); // ✅ 新增：已綁定的客人自動帶入車牌（不等待、不阻塞）
             } catch (err) {
                 console.warn("⚠️ LIFF 初始化失敗（可能非 LINE 環境）：", err);
             }
@@ -238,6 +240,88 @@
                 }
             } catch (err) {
                 console.error("❌ bind_line_user 例外:", err);
+            }
+        }
+        // ✅ 新增：已完成綁定的客人，車牌自動帶入；還沒綁定的客人才需要自己填寫。
+        // 用既有的 liff_list_bindings（以 LINE userId 查 customers 已綁定的車牌，已去除重複）。
+        // 任何一步失敗都只會退回「客人自行填寫」，不會影響預約流程。
+        function setPlateLocked(input, locked) {
+            input.readOnly = locked;
+            input.style.backgroundColor = locked ? '#f3f4f6' : '';
+        }
+        async function prefillBoundPlates() {
+            const input = document.getElementById('licensePlate');
+            const hint = document.getElementById('plateHint');
+            if (!window.lineUserId || !input || !hint) return;
+            try {
+                const { data, error } = await supabaseClient.rpc('liff_list_bindings', {
+                    p_line_user_id: window.lineUserId
+                });
+                if (error) {
+                    console.warn("⚠️ liff_list_bindings 失敗，改由客人自行填寫車牌:", error);
+                    return;
+                }
+                const cars = (data && Array.isArray(data.cars))
+                    ? data.cars.map(c => String(c || '').trim()).filter(Boolean)
+                    : [];
+                if (cars.length === 0) {
+                    console.log("ℹ️ 此 LINE 尚未綁定車牌，由客人自行填寫");
+                    return;
+                }
+                if (input.value.trim() !== '') return; // 客人已經自己輸入了就不覆蓋
+
+                input.value = cars[0]; // 最近使用的一台
+                setPlateLocked(input, true);
+
+                hint.textContent = '';
+                const note = document.createElement('p');
+                note.className = 'text-xs text-green-700 font-bold mt-1';
+                note.textContent = cars.length === 1
+                    ? '✅ 已綁定車牌，已自動帶入'
+                    : '✅ 您有 ' + cars.length + ' 台已綁定的車，請選擇這次預約的車';
+                hint.appendChild(note);
+
+                const row = document.createElement('div');
+                row.className = 'flex flex-wrap gap-2 mt-2';
+                const chips = [];
+                const paint = (activeChip) => {
+                    chips.forEach(ch => {
+                        const on = ch === activeChip;
+                        ch.className = 'px-3 py-1 rounded-full text-xs font-bold border ' +
+                            (on ? 'bg-green-500 text-white border-green-500'
+                                : 'bg-white text-gray-600 border-gray-300');
+                    });
+                };
+                if (cars.length > 1) {
+                    cars.forEach((plate, i) => {
+                        const chip = document.createElement('button');
+                        chip.type = 'button';
+                        chip.textContent = plate;
+                        chip.addEventListener('click', () => {
+                            input.value = plate;
+                            setPlateLocked(input, true);
+                            paint(chip);
+                        });
+                        chips.push(chip);
+                        row.appendChild(chip);
+                    });
+                }
+                const other = document.createElement('button');
+                other.type = 'button';
+                other.textContent = cars.length > 1 ? '其他車牌' : '不是這台？改填其他車牌';
+                other.addEventListener('click', () => {
+                    input.value = '';
+                    setPlateLocked(input, false);
+                    paint(null);
+                    input.focus();
+                });
+                chips.push(other);
+                row.appendChild(other);
+                hint.appendChild(row);
+                paint(cars.length > 1 ? chips[0] : null);
+                hint.classList.remove('hidden');
+            } catch (err) {
+                console.warn("⚠️ 自動帶入車牌例外，改由客人自行填寫:", err);
             }
         }
         const canvas = document.getElementById('reservationCanvas');
